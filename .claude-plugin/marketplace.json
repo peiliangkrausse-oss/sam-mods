@@ -1,0 +1,17 @@
+{
+  "name": "sam-mods",
+  "owner": {
+    "name": "Sam"
+  },
+  "plugins": [
+    {
+      "name": "usage-band",
+      "source": "./usage-band"
+    },
+    {
+      "name": "usage-analytics",
+      "source": "./usage-analytics"
+    }
+  ],
+  "description": "Sam's own Claude mods"
+}

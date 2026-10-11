@@ -1,0 +1,15 @@
+{
+  "name": "usage-analytics",
+  "version": "0.1.0",
+  "description": "A side pane (/spend) showing what your Claude Code chats would cost at API list prices, in euros: today, this month, a 30-day chart, projects and priciest chats. Keeps its own log so history outlives Claude's 30-day cleanup.",
+  "author": { "name": "Sam" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "eur_rate": {
+      "type": "string",
+      "title": "Dollar to euro rate",
+      "description": "How many euros one US dollar is worth. Prices are in dollars; the pane multiplies by this.",
+      "default": "0.86"
+    }
+  }
+}
