@@ -10,7 +10,7 @@ const warned = atom({ plugin: 'usage-band', key: 'warned' } as const, [])
 // Handoff row: "Later" hides it until the chat reaches this percent.
 const snoozedBelow = atom({ plugin: 'usage-band', key: 'snoozedBelow' } as const, null)
 
-const REFRESH_MS = 60_000
+const REFRESH_MS = 10_000
 const WARN_AT = [95, 80]
 const HANDOFF_AT = 85
 const HANDOFF_SNOOZE_TO = 95
@@ -145,6 +145,14 @@ export const register: Register = (on, options) => {
     await refresh($)
 
     return measured
+  })
+
+  // After every tool call too, so the band moves during a long reply, not only when it ends.
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    void refresh($)
+
+    return result
   })
 
   on('turn.complete', async ($, e, next) => {
