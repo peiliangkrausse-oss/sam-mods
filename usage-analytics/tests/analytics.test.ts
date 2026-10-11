@@ -105,3 +105,18 @@ test('keeps logged days after Claude deletes the transcript', async ($, on) => {
   expect(chats.old.t).toBe('Old chat')
   expect(chats.c1.t).toBe('Budget tab')
 })
+
+test('picks up what another chat logged since the last scan', { options: { eur_rate: '0.5' } }, async ($, on) => {
+  const store = machine(on)
+  await $.command.run({ command: 'spend', args: '' })
+
+  // Another chat adds its own $8 today to the shared log.
+  const chats = store['v2.chats'] as Record<string, unknown>
+  store['v2.chats'] = { ...chats, other: { t: 'Other chat', p: 'work', d: { '2026-10-11': { 'Opus 5.5': 8 } } } }
+  await $.command.run({ command: 'spend', args: '' })
+
+  // Today $20 + $8 -> €14, and this chat's own entry is kept.
+  const ui = await pane($)
+  expect(await ui.find({ type: 'Svg', alt: '€14.00' })).toBeDefined()
+  expect((store['v2.chats'] as Record<string, { t: string }>).other.t).toBe('Other chat')
+})

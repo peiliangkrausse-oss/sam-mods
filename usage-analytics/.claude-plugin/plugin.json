@@ -1,6 +1,6 @@
 {
   "name": "usage-analytics",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A side pane (/spend) showing what your Claude Code chats would cost at API list prices, in euros: today, this month, a 30-day chart, projects and priciest chats. Keeps its own log so history outlives Claude's 30-day cleanup.",
   "author": { "name": "Sam" },
   "types": "./types/index.d.ts",

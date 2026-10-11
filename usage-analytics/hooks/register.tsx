@@ -25,7 +25,9 @@ const viewAtom = atom({ plugin: 'usage-analytics', key: 'view' } as const, {
 const scannedAtom = atom({ plugin: 'usage-analytics', key: 'scannedAt' } as const, 0)
 const statusAtom = atom({ plugin: 'usage-analytics', key: 'status' } as const, '')
 
-const REFRESH_MS = 120_000
+// Every 15 s while the pane is open; every 5 minutes otherwise, so the shared log stays current.
+const REFRESH_MS = 15_000
+const IDLE_EVERY = 20
 // $.fs.read stops at 4 MiB; bigger transcripts are streamed through `cat`.
 const READ_LIMIT = 4_000_000
 const COL_PX = 12.5
@@ -198,7 +200,8 @@ const scan = async ($: EngineInterface) => {
   try {
     const home = (await $.env.get('HOME')) ?? ''
     const root = `${home}/.claude/projects`
-    ledger ??= ((await $.store.get('v2.chats')) ?? {}) as Record<string, Chat>
+    // Re-read every time: other chats write to the same store, and a cached copy would drift and overwrite them.
+    ledger = ((await $.store.get('v2.chats')) ?? {}) as Record<string, Chat>
     const seen = ((await $.store.get('v2.seen')) ?? {}) as Record<string, string>
     let changed = 0
 
@@ -218,10 +221,11 @@ const scan = async ($: EngineInterface) => {
 
         const signature = files.map(f => `${f.size}:${f.mtimeMs}`).join('|')
         let draft = drafts.get(id)
-        if (seen[id] === signature && draft === undefined) continue
-        if (draft !== undefined && files.every(f => marks.get(f.path)?.size === f.size)) continue
+        // Already logged at this size, by this chat or another one.
+        if (seen[id] === signature) continue
 
         // A file that shrank, or a chat not yet counted in this session, is counted from the top.
+        // A draft that is already up to date (another chat's write replaced it) is simply written back.
         if (draft === undefined || files.some(f => (marks.get(f.path)?.size ?? 0) > f.size)) {
           draft = { t: '', p: '', d: {}, seen: new Set() }
           for (const file of files) marks.delete(file.path)
@@ -313,7 +317,8 @@ export const register: Register = (on, options) => {
     await $.command.register({ name: 'spend', description: 'Show what your chats cost per day, project and chat' })
     // Logs costs in the background every session, so history is kept even when the pane stays shut.
     void scan($)
-    $.clock.every(REFRESH_MS, () => void (isPaneOpen ? scan($) : undefined))
+    let ticks = 0
+    $.clock.every(REFRESH_MS, () => void (isPaneOpen || ++ticks % IDLE_EVERY === 0 ? scan($) : undefined))
 
     return started
   })
