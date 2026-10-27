@@ -26,8 +26,6 @@ const SPARE = 0.95
 const PAD_CELLS = 4
 // Clear space between the band's content and the edge of its box.
 const EDGE_CELLS = 2
-// Below this a quarter of the band is too tight for one cell, so the band becomes two rows of two.
-const MIN_CELL_PX = 190
 const MIN_BAR_PX = 24
 const MAX_BAR_PX = 160
 // Share of the leftover width a bar may take; the rest is safety margin, since text widths are estimates.
@@ -47,9 +45,6 @@ const CHAR_PX = 10
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
 const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
-
-const tokens = (n: number) =>
-  n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : `${n}`
 
 // A hairline drawn as an image, so it cannot follow the theme: a translucent track reads on light and dark.
 const bar = (percent: number | null, width: number) => {
@@ -82,15 +77,6 @@ const pad = (label: string) => `\u200B${SIDE}${label}${SIDE}\u200B`
 
 const until = (iso: string, now: number) => {
   const minutes = Math.max(0, Math.round((Date.parse(iso) - now) / 60_000))
-  if (minutes < 60) return `${minutes}m`
-  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  const hours = Math.floor((minutes % 1440) / 60)
-  return `${Math.floor(minutes / 1440)}d${hours ? ` ${hours}h` : ''}`
-}
-
-const ago = (ms: number) => {
-  const minutes = Math.floor(ms / 60_000)
-  if (minutes < 1) return '<1m'
   if (minutes < 60) return `${minutes}m`
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
   const hours = Math.floor((minutes % 1440) / 60)
@@ -138,10 +124,7 @@ const refresh = async ($: EngineInterface) => {
   await warn($, limits, now)
 }
 
-export const register: Register = (on, options) => {
-  const parsed = Number(String(options.eur_rate ?? '').replace(',', '.'))
-  const eurRate = Number.isFinite(parsed) && parsed > 0 ? parsed : 0.86
-
+export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await refresh($)
@@ -187,47 +170,25 @@ export const register: Register = (on, options) => {
 
     const { Box, Button, Svg, Text } = $.ui.resolve(e)
 
-    // Four equal cells on one line; on a narrow window, two rows of two.
+    // Just the 5-hour and weekly limits, side by side on one line, each half of the band.
     const availPx = e.props.bodyColumns * COL_PX * SPARE - EDGE_CELLS * 2 * CELL_PX
-    const isTwoByTwo = availPx / 4 - PAD_CELLS * CELL_PX < MIN_CELL_PX
-    const cellPx = (isTwoByTwo ? availPx / 2 : availPx / 4) - PAD_CELLS * CELL_PX
-    const colWidth = isTwoByTwo ? '50%' : '25%'
-
-    // Label, bar and bold value in one row. Every bar is the same width, sized to the widest cell
-    // ("Context 100%") with room to spare, so no cell spills into the next one.
-    const widest = ('Context'.length + '100%'.length) * CHAR_PX + 2 * ITEM_GAP * CELL_PX
-    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((cellPx - widest) * BAR_SPARE)))
-    const meter = (name: string, value: string, detail: string, percent: number | null, hasBar = true) => {
-      return (
-        <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
-          <Text>{name}</Text>
-          {hasBar ? (
-            <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
-          ) : null}
-          <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
-          {detail ? <Text dimColor wrap="truncate-end">{detail}</Text> : null}
-        </Box>
-      )
-    }
-
-    // Context is just the number, no bar (Sam's call); it still turns amber and red.
-    const context = meter('Context', snap.contextPercent === null ? '–' : `${snap.contextPercent}%`, '', snap.contextPercent, false)
-    const limits =
-      snap.limits.length === 0
-        ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', '', null))
-        // No reset time here: it didn't fit and got cut off. The 80%/95% toasts still say when a limit resets.
-        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, '', l.percent))
-    const cost = snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`
-    const session = (
-      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
-        <Text bold>{cost}</Text>
-        <Box flexGrow={1}>
-          <Text dimColor wrap="truncate-end">{`${ago(snap.at - snap.startedAt)} · ${snap.prompts}`}</Text>
-        </Box>
-        {/* Opens the usage-analytics side pane (its /spend command). */}
-        <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
+    const halfPx = availPx / 2 - PAD_CELLS * CELL_PX
+    // Both bars are the same width, sized to the wider cell ("Week 100%") with room to spare.
+    const words = ('Week'.length + '100%'.length) * CHAR_PX + 2 * ITEM_GAP * CELL_PX
+    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((halfPx - words) * BAR_SPARE)))
+    const meter = (name: string, value: string, percent: number | null) => (
+      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width="50%" paddingRight={PAD_CELLS}>
+        <Text>{name}</Text>
+        <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
+        <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
       </Box>
     )
+
+    // Reset times live in the 80%/95% toasts; they didn't fit in the band.
+    const limits =
+      snap.limits.length === 0
+        ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', null))
+        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.percent))
 
     const snooze = await read($, snoozedBelow)
     const pct = snap.contextPercent
@@ -262,10 +223,8 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS}>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
         {handoff}
-        <Box flexDirection="row" flexWrap="wrap" width="100%">
-          {context}
+        <Box flexDirection="row" width="100%">
           {limits}
-          {session}
         </Box>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
       </Box>

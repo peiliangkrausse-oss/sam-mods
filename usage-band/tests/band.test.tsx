@@ -28,15 +28,18 @@ const measure = (fiveHour: number, weekly: number, ctx = 7) => {
   return { context: u.context, rateLimits: u.rateLimits, cost: u.cost, changed: ['rateLimits' as const] }
 }
 
-test('shows cost in euros at the configured rate, no reset times in the band', { options: { eur_rate: '0.9' } }, async ($, on) => {
+test('one line with only the 5-hour and weekly limits', async ($, on) => {
   session(on, 2, 28)
   await $.session.measure(measure(2, 28))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
 
-  expect(await ui.find({ type: 'Text', text: '€0.90' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '7%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '4h 12m' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '1m · 2' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '5h' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '2%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Week' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '28%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Context' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '€1.00' })).toBeUndefined()
+  expect(await ui.find({ key: 'open-usage' })).toBeUndefined()
 })
 
 test('colours a limit amber past 80% and red past 95%', async ($, on) => {
@@ -46,20 +49,6 @@ test('colours a limit amber past 80% and red past 95%', async ($, on) => {
 
   expect((await ui.find({ type: 'Text', text: '86%' }))?.props).toMatchObject({ color: 'warning' })
   expect((await ui.find({ type: 'Text', text: '97%' }))?.props).toMatchObject({ color: 'error' })
-})
-
-test('the Usage button under the cost opens the usage pane', async ($, on) => {
-  session(on, 2, 28)
-  const ran: string[] = []
-  on('command.run', (_$, e) => {
-    ran.push(e.command)
-    return { text: '' }
-  })
-  await $.session.measure(measure(2, 28))
-  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
-
-  await ui.press({ key: 'open-usage' })
-  expect(ran).toEqual(['spend'])
 })
 
 test('handoff row: Hand off submits the handoff prompt, then hides', async ($, on) => {
@@ -76,7 +65,7 @@ test('handoff row: Hand off submits the handoff prompt, then hides', async ($, o
   await ui.press({ key: 'handoff' })
   expect(sent[0]).toContain('context-handoff')
   expect(await ui.find({ key: 'handoff' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '87%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '28%' })).toBeDefined()
 })
 
 test('handoff row stays hidden below 85%', async ($, on) => {
@@ -84,5 +73,5 @@ test('handoff row stays hidden below 85%', async ($, on) => {
   await $.session.measure(measure(2, 28, 60))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   expect(await ui.find({ key: 'handoff' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '60%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '28%' })).toBeDefined()
 })
