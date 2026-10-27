@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Thin one-line usage band above the prompt in the desktop Code tab: 5-hour and weekly limits as bars with their %. Bars turn amber at 80% and red at 95%. Shows a hand-off row when the chat is 85% full. Based on desktop-statusline by George Liu (MIT).",
   "author": {
     "name": "Sam"
