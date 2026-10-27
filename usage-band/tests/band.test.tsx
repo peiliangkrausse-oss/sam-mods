@@ -28,15 +28,15 @@ const measure = (fiveHour: number, weekly: number, ctx = 7) => {
   return { context: u.context, rateLimits: u.rateLimits, cost: u.cost, changed: ['rateLimits' as const] }
 }
 
-test('shows cost in euros at the configured rate, details under the bars', { options: { eur_rate: '0.9' } }, async ($, on) => {
+test('shows cost in euros at the configured rate, reset times beside the bars', { options: { eur_rate: '0.9' } }, async ($, on) => {
   session(on, 2, 28)
   await $.session.measure(measure(2, 28))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
 
   expect(await ui.find({ type: 'Text', text: '€0.90' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '70k of 1M tokens' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'resets in 4h 12m' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '1m · 2 prompts' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '7%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '4h 12m' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '1m · 2' })).toBeDefined()
 })
 
 test('colours a limit amber past 80% and red past 95%', async ($, on) => {
@@ -76,7 +76,7 @@ test('handoff row: Hand off submits the handoff prompt, then hides', async ($, o
   await ui.press({ key: 'handoff' })
   expect(sent[0]).toContain('context-handoff')
   expect(await ui.find({ key: 'handoff' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '870k of 1M tokens' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '87%' })).toBeDefined()
 })
 
 test('handoff row stays hidden below 85%', async ($, on) => {
@@ -84,5 +84,5 @@ test('handoff row stays hidden below 85%', async ($, on) => {
   await $.session.measure(measure(2, 28, 60))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
   expect(await ui.find({ key: 'handoff' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '600k of 1M tokens' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '60%' })).toBeDefined()
 })

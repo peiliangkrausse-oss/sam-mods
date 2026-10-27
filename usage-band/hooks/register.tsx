@@ -17,6 +17,8 @@ const HANDOFF_SNOOZE_TO = 95
 const HANDOFF_PROMPT =
   'Run the context-handoff skill (anthropic-skills:context-handoff) now and give me the full copy-pasteable handoff block for a new chat.'
 const LABELS: Record<string, string> = { five_hour: '5-hour', seven_day: 'Weekly' }
+// Shorter names for the one-line band; toasts keep the long ones.
+const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'Week' }
 // Desktop metrics in CSS px: one column of `bodyColumns`, and one Box cell of padding.
 const COL_PX = 12.5
 const CELL_PX = 15
@@ -24,14 +26,24 @@ const SPARE = 0.95
 const PAD_CELLS = 3
 // Clear space between the band's content and the edge of its box.
 const EDGE_CELLS = 2
-const MIN_BAR_PX = 80
+// Below this a quarter of the band is too tight for one cell, so the band becomes two rows of two.
+const MIN_CELL_PX = 190
+const MIN_BAR_PX = 24
 const MAX_BAR_PX = 260
-const BAR_H = 6
-// Clear space above and below the bar, drawn inside the image so it is exact.
-const AIR = 6
+const BAR_H = 4
+const AIR = 0
 const SVG_H = BAR_H + AIR * 2
+// Clear space above and below the band, as an image so it can be thinner than a blank row.
+const EDGE_PX = 6
+// Space between the items inside one cell, in cells.
+const ITEM_GAP = 1
 
+// The app sends no limits until its first reading; keep their columns so the layout doesn't jump.
+const PLACEHOLDER_KINDS = ['five_hour', 'seven_day']
+// Rough desktop width of one character, to size each bar to the words around it.
+const CHAR_PX = 8
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
+const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
 
 const tokens = (n: number) =>
@@ -49,16 +61,17 @@ const bar = (percent: number | null, width: number) => {
   )
 }
 
-// Keeps the cost column's detail line level with the meters' detail lines.
-const spacer = (width: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${SVG_H}" viewBox="0 0 ${width} ${SVG_H}">` +
+// Empty clear space of an exact height.
+const spacer = (width: number, height: number) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
   // An invisible rect, so the empty image is not collapsed to nothing.
-  `<rect width="${width}" height="${SVG_H}" fill="#000" fill-opacity="0"/></svg>`
+  `<rect width="${width}" height="${height}" fill="#000" fill-opacity="0"/></svg>`
 
 // A full-width hairline between the handoff row and the meters.
+const DIVIDER_H = 18
 const divider = (width: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${SVG_H}" viewBox="0 0 ${width} ${SVG_H}">` +
-  `<rect y="${SVG_H / 2}" width="${width}" height="1" fill="#808080" fill-opacity="0.4"/></svg>`
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${DIVIDER_H}" viewBox="0 0 ${width} ${DIVIDER_H}">` +
+  `<rect y="${DIVIDER_H / 2}" width="${width}" height="1" fill="#808080" fill-opacity="0.4"/></svg>`
 
 // Desktop buttons are drawn natively with fixed padding; non-breaking spaces widen them from inside.
 // Zero-width guards keep the label from being trimmed back to its words.
@@ -77,7 +90,9 @@ const ago = (ms: number) => {
   const minutes = Math.floor(ms / 60_000)
   if (minutes < 1) return '<1m'
   if (minutes < 60) return `${minutes}m`
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  const hours = Math.floor((minutes % 1440) / 60)
+  return `${Math.floor(minutes / 1440)}d${hours ? ` ${hours}h` : ''}`
 }
 
 const isOnDesktop = async ($: EngineInterface) => (await $.session.surfaces()).includes('desktop')
@@ -170,59 +185,41 @@ export const register: Register = (on, options) => {
 
     const { Box, Button, Svg, Text } = $.ui.resolve(e)
 
-    // Four equal columns; on a narrow window, two rows of two.
+    // Four equal cells on one line; on a narrow window, two rows of two.
     const availPx = e.props.bodyColumns * COL_PX * SPARE - EDGE_CELLS * 2 * CELL_PX
-    const fourBar = Math.floor(availPx / 4 - PAD_CELLS * CELL_PX)
-    const isTwoByTwo = fourBar < MIN_BAR_PX
-    const barPx = Math.min(MAX_BAR_PX, isTwoByTwo ? Math.floor(availPx / 2 - PAD_CELLS * CELL_PX) : fourBar)
+    const isTwoByTwo = availPx / 4 - PAD_CELLS * CELL_PX < MIN_CELL_PX
+    const cellPx = (isTwoByTwo ? availPx / 2 : availPx / 4) - PAD_CELLS * CELL_PX
     const colWidth = isTwoByTwo ? '50%' : '25%'
 
-    const column = (name: string, value: string, detail: string, percent: number | null, hasBar: boolean, extra?: unknown) => (
-      <Box flexDirection="column" width={colWidth} paddingRight={PAD_CELLS}>
-        <Box flexDirection="row" justifyContent="space-between">
+    // Label, bar, bold value and detail in one row; the bar takes whatever width the words leave.
+    const meter = (name: string, value: string, detail: string, percent: number | null) => {
+      const words = (name.length + value.length + detail.length) * CHAR_PX + 3 * ITEM_GAP * CELL_PX
+      const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor(cellPx - words)))
+      return (
+        <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
           <Text>{name}</Text>
+          <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
           <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
+          {detail ? <Text dimColor wrap="truncate-end">{detail}</Text> : null}
         </Box>
-        <Svg
-          source={hasBar ? bar(percent, barPx) : spacer(barPx)}
-          alt={hasBar && percent !== null ? `${name} ${percent}% used` : ''}
-          width={barPx}
-          height={SVG_H}
-        />
-        {extra ? (
-          // A button sits at the right of the detail line, under the value, where the row has room.
-          <Box flexDirection="row" justifyContent="space-between" alignItems="center" columnGap={2} marginTop={1}>
-            <Text dimColor wrap="truncate-end">{detail}</Text>
-            {extra}
-          </Box>
-        ) : (
-          <Text dimColor wrap="truncate-end">{detail}</Text>
-        )}
-      </Box>
-    )
+      )
+    }
 
-    const context =
-      snap.contextPercent === null
-        ? column('Context', '–', 'waiting for first response', null, true)
-        : column(
-            'Context',
-            `${snap.contextPercent}%`,
-            snap.contextTokens === null ? '' : `${tokens(snap.contextTokens)} of ${tokens(snap.contextWindow)} tokens`,
-            snap.contextPercent,
-            true,
-          )
-    const limits = snap.limits.map(l =>
-      column(label(l.kind), `${l.percent}%`, l.resetsAt ? `resets in ${until(l.resetsAt, snap.at)}` : '', l.percent, true),
-    )
+    const context = meter('Context', snap.contextPercent === null ? '–' : `${snap.contextPercent}%`, '', snap.contextPercent)
+    const limits =
+      snap.limits.length === 0
+        ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', '', null))
+        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.resetsAt ? until(l.resetsAt, snap.at) : '', l.percent))
     const cost = snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`
-    const session = column(
-      'Session',
-      cost,
-      `${ago(snap.at - snap.startedAt)} · ${snap.prompts} prompt${snap.prompts === 1 ? '' : 's'}`,
-      null,
-      false,
-      // Opens the usage-analytics side pane (its /spend command).
-      <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />,
+    const session = (
+      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
+        <Text bold>{cost}</Text>
+        <Box flexGrow={1}>
+          <Text dimColor wrap="truncate-end">{`${ago(snap.at - snap.startedAt)} · ${snap.prompts}`}</Text>
+        </Box>
+        {/* Opens the usage-analytics side pane (its /spend command). */}
+        <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
+      </Box>
     )
 
     const snooze = await read($, snoozedBelow)
@@ -249,19 +246,21 @@ export const register: Register = (on, options) => {
         </Box>
       </Box>
       <Box marginTop={1} marginBottom={1}>
-        <Svg source={divider(Math.floor(availPx))} alt="" width={Math.floor(availPx)} height={SVG_H} />
+        <Svg source={divider(Math.floor(availPx))} alt="" width={Math.floor(availPx)} height={DIVIDER_H} />
       </Box>
       </Box>
     ) : null
 
     return (
-      <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS} paddingY={1}>
+      <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS}>
+        <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
         {handoff}
-        <Box flexDirection="row" flexWrap="wrap" width="100%" rowGap={1}>
+        <Box flexDirection="row" flexWrap="wrap" width="100%">
           {context}
           {limits}
           {session}
         </Box>
+        <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
       </Box>
     )
   })
