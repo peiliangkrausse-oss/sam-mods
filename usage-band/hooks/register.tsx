@@ -27,9 +27,9 @@ const PAD_CELLS = 4
 // Clear space between the band's content and the edge of its box.
 const EDGE_CELLS = 2
 const MIN_BAR_PX = 24
-const MAX_BAR_PX = 160
+const MAX_BAR_PX = 120
 // Share of the leftover width a bar may take; the rest is safety margin, since text widths are estimates.
-const BAR_SPARE = 0.85
+const BAR_SPARE = 0.7
 const BAR_H = 4
 const AIR = 0
 const SVG_H = BAR_H + AIR * 2
@@ -181,10 +181,11 @@ export const register: Register = on => {
     const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((halfPx - words) * BAR_SPARE)))
     const meter = (name: string, value: string, percent: number | null, resets = '') => (
       <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={METER_WIDTH} paddingRight={PAD_CELLS}>
-        <Text>{name}</Text>
+        <Box flexShrink={0}><Text>{name}</Text></Box>
         <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
-        <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
-        {resets ? <Text dimColor>{resets}</Text> : null}
+        <Box flexShrink={0}><Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text></Box>
+        {/* Never squeezed, so a reset time like "2d 11h" can't break onto two lines. */}
+        {resets ? <Box flexShrink={0}><Text dimColor wrap="truncate-end">{resets}</Text></Box> : null}
       </Box>
     )
 
