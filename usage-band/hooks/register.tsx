@@ -197,18 +197,21 @@ export const register: Register = (on, options) => {
     // ("Context 100%") with room to spare, so no cell spills into the next one.
     const widest = ('Context'.length + '100%'.length) * CHAR_PX + 2 * ITEM_GAP * CELL_PX
     const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((cellPx - widest) * BAR_SPARE)))
-    const meter = (name: string, value: string, detail: string, percent: number | null) => {
+    const meter = (name: string, value: string, detail: string, percent: number | null, hasBar = true) => {
       return (
         <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
           <Text>{name}</Text>
-          <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
+          {hasBar ? (
+            <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
+          ) : null}
           <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
           {detail ? <Text dimColor wrap="truncate-end">{detail}</Text> : null}
         </Box>
       )
     }
 
-    const context = meter('Context', snap.contextPercent === null ? '–' : `${snap.contextPercent}%`, '', snap.contextPercent)
+    // Context is just the number, no bar (Sam's call); it still turns amber and red.
+    const context = meter('Context', snap.contextPercent === null ? '–' : `${snap.contextPercent}%`, '', snap.contextPercent, false)
     const limits =
       snap.limits.length === 0
         ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', '', null))

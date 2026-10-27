@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Hairline usage band above the prompt in the desktop Code tab: context, 5-hour and weekly limits with reset times underneath, and session cost in euros. Bars turn amber at 80% and red at 95%. Based on desktop-statusline by George Liu (MIT).",
   "author": { "name": "Sam" },
   "types": "./types/index.d.ts",
