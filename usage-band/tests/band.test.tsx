@@ -28,14 +28,14 @@ const measure = (fiveHour: number, weekly: number, ctx = 7) => {
   return { context: u.context, rateLimits: u.rateLimits, cost: u.cost, changed: ['rateLimits' as const] }
 }
 
-test('shows cost in euros at the configured rate, reset times beside the bars', { options: { eur_rate: '0.9' } }, async ($, on) => {
+test('shows cost in euros at the configured rate, no reset times in the band', { options: { eur_rate: '0.9' } }, async ($, on) => {
   session(on, 2, 28)
   await $.session.measure(measure(2, 28))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
 
   expect(await ui.find({ type: 'Text', text: '€0.90' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '7%' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '4h 12m' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '4h 12m' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: '1m · 2' })).toBeDefined()
 })
 

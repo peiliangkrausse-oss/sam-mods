@@ -209,7 +209,8 @@ export const register: Register = (on, options) => {
     const limits =
       snap.limits.length === 0
         ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', '', null))
-        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.resetsAt ? until(l.resetsAt, snap.at) : '', l.percent))
+        // No reset time here: it didn't fit and got cut off. The 80%/95% toasts still say when a limit resets.
+        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, '', l.percent))
     const cost = snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`
     const session = (
       <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
