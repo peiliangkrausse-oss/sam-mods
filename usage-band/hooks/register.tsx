@@ -17,34 +17,17 @@ const HANDOFF_SNOOZE_TO = 95
 const HANDOFF_PROMPT =
   'Run the context-handoff skill (anthropic-skills:context-handoff) now and give me the full copy-pasteable handoff block for a new chat.'
 const LABELS: Record<string, string> = { five_hour: '5-hour', seven_day: 'Weekly' }
-// Shorter names for the one-line band; toasts keep the long ones.
+// Shorter names for the footer meters; toasts keep the long ones.
 const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'Week' }
-// Desktop metrics in CSS px: one column of `bodyColumns`, and one Box cell of padding.
-const COL_PX = 12.5
-const CELL_PX = 15
-const SPARE = 0.95
-const PAD_CELLS = 4
-// Clear space between the band's content and the edge of its box.
+// Padding around the hand-off row, in cells.
 const EDGE_CELLS = 2
-const MIN_BAR_PX = 24
-const MAX_BAR_PX = 160
-// Share of the leftover width a bar may take; the rest is safety margin, since text widths are estimates.
-const BAR_SPARE = 0.85
+// The footer meters' bars: short, so the row fits beside the model picker.
+const FOOTER_BAR_PX = 48
 const BAR_H = 4
-const AIR = 0
-const SVG_H = BAR_H + AIR * 2
-// Clear space above and below the band, as an image so it can be thinner than a blank row.
-const EDGE_PX = 6
-// Space between the items inside one cell, in cells.
-const ITEM_GAP = 1
+const SVG_H = BAR_H
 
-// The app sends no limits until its first reading; keep their columns so the layout doesn't jump.
+// The app sends no limits until its first reading; keep their meters so the row doesn't jump.
 const PLACEHOLDER_KINDS = ['five_hour', 'seven_day']
-// Rough desktop width of one character (on the generous side), to size the bars.
-const CHAR_PX = 10
-// Share of the band each meter gets; the rest at the right holds the Usage link.
-const METER_SHARE = 0.44
-const METER_WIDTH = `${METER_SHARE * 100}%`
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
 const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
@@ -55,23 +38,11 @@ const bar = (percent: number | null, width: number) => {
   const filled = percent === null ? 0 : Math.round((Math.min(percent, 100) / 100) * width)
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${SVG_H}" viewBox="0 0 ${width} ${SVG_H}">` +
-    `<rect y="${AIR}" width="${width}" height="${BAR_H}" rx="3" fill="#808080" fill-opacity="0.3"/>` +
-    (filled > 0 ? `<rect y="${AIR}" width="${filled}" height="${BAR_H}" rx="3" fill="${fill}"/>` : '') +
+    `<rect width="${width}" height="${BAR_H}" rx="2" fill="#808080" fill-opacity="0.3"/>` +
+    (filled > 0 ? `<rect width="${filled}" height="${BAR_H}" rx="2" fill="${fill}"/>` : '') +
     `</svg>`
   )
 }
-
-// Empty clear space of an exact height.
-const spacer = (width: number, height: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
-  // An invisible rect, so the empty image is not collapsed to nothing.
-  `<rect width="${width}" height="${height}" fill="#000" fill-opacity="0"/></svg>`
-
-// A full-width hairline between the handoff row and the meters.
-const DIVIDER_H = 18
-const divider = (width: number) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${DIVIDER_H}" viewBox="0 0 ${width} ${DIVIDER_H}">` +
-  `<rect y="${DIVIDER_H / 2}" width="${width}" height="1" fill="#808080" fill-opacity="0.4"/></svg>`
 
 // Desktop buttons are drawn natively with fixed padding; non-breaking spaces widen them from inside.
 // Zero-width guards keep the label from being trimmed back to its words.
@@ -165,41 +136,19 @@ export const register: Register = on => {
     return completed
   })
 
+  // Above the prompt: only the hand-off row, and only once the chat is nearly full.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.surface !== 'desktop' || e.props.hasSurvey) return next(e)
 
     const snap = await read($, snapshot)
-    if (snap === null) return next(e)
-
-    const { Box, Button, Svg, Text } = $.ui.resolve(e)
-
-    // The 5-hour and weekly limits side by side on one line, with the Usage link at the far right.
-    const availPx = e.props.bodyColumns * COL_PX * SPARE - EDGE_CELLS * 2 * CELL_PX
-    const halfPx = availPx * METER_SHARE - PAD_CELLS * CELL_PX
-    // Both bars are the same width, sized to the widest cell ("Week 100% ↻ 6d 23h") with room to spare.
-    const words = ('Week'.length + '100%'.length + '↻ 6d 23h'.length) * CHAR_PX + 3 * ITEM_GAP * CELL_PX
-    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((halfPx - words) * BAR_SPARE)))
-    const meter = (name: string, value: string, percent: number | null, resets = '') => (
-      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={METER_WIDTH} paddingRight={PAD_CELLS}>
-        <Text>{name}</Text>
-        <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
-        <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
-        {resets ? <Text dimColor>{resets}</Text> : null}
-      </Box>
-    )
-
-    // The reset time follows the %, dimmed, e.g. "↻ 3h 43m".
-    const limits =
-      snap.limits.length === 0
-        ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', null))
-        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.percent, l.resetsAt ? `↻ ${until(l.resetsAt, snap.at)}` : ''))
-
     const snooze = await read($, snoozedBelow)
-    const pct = snap.contextPercent
+    const pct = snap?.contextPercent ?? null
     const isHandoff = pct !== null && pct >= HANDOFF_AT && (snooze === null || pct >= snooze)
-    const handoff = isHandoff ? (
-      <Box flexDirection="column" width="100%" marginBottom={1}>
-      <Box flexDirection="row" alignItems="center" width="100%" columnGap={4}>
+    if (!isHandoff) return next(e)
+
+    const { Box, Button, Text } = $.ui.resolve(e)
+    return (
+      <Box flexDirection="row" alignItems="center" width="100%" columnGap={4} paddingX={EDGE_CELLS} paddingY={1}>
         <Box flexGrow={1} flexDirection="column">
           <Text bold color="warning">This chat is {pct}% full</Text>
           <Text dimColor>Hand off to a fresh chat before quality drops</Text>
@@ -207,34 +156,49 @@ export const register: Register = on => {
         <Box flexDirection="row" alignItems="center" columnGap={3}>
           <Button key="handoff-later" label={pad('Later')} onPress={() => update($, snoozedBelow, () => HANDOFF_SNOOZE_TO)} />
           <Button
-          key="handoff"
-          label={pad('Hand off')}
-          variant="primary"
-          onPress={async () => {
-            await update($, snoozedBelow, () => 101)
-            await $.prompt.submit({ text: HANDOFF_PROMPT, asUser: true })
-          }}
+            key="handoff"
+            label={pad('Hand off')}
+            variant="primary"
+            onPress={async () => {
+              await update($, snoozedBelow, () => 101)
+              await $.prompt.submit({ text: HANDOFF_PROMPT, asUser: true })
+            }}
           />
         </Box>
       </Box>
-      <Box marginTop={1} marginBottom={1}>
-        <Svg source={divider(Math.floor(availPx))} alt="" width={Math.floor(availPx)} height={DIVIDER_H} />
+    )
+  })
+
+  // Under the prompt, in the footer row: the 5-hour and weekly meters and the Usage link, then
+  // whatever else draws there (the mcp-panel button, the mode labels), so both mods show.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    const rest = await next(e)
+    if (e.surface !== 'desktop') return rest
+
+    const snap = await read($, snapshot)
+    if (snap === null) return rest
+
+    const { Box, Button, Svg, Text } = $.ui.resolve(e)
+    const meter = (name: string, value: string, percent: number | null, resets = '') => (
+      <Box key={`meter-${name}`} flexDirection="row" alignItems="center" columnGap={1}>
+        <Text dimColor>{name}</Text>
+        <Svg source={bar(percent, FOOTER_BAR_PX)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={FOOTER_BAR_PX} height={SVG_H} />
+        <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
+        {resets ? <Text dimColor>{resets}</Text> : null}
       </Box>
-      </Box>
-    ) : null
+    )
+    // The reset time follows the %, dimmed, e.g. "↻ 3h 43m".
+    const limits =
+      snap.limits.length === 0
+        ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', null))
+        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.percent, l.resetsAt ? `↻ ${until(l.resetsAt, snap.at)}` : ''))
 
     return (
-      <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS}>
-        <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
-        {handoff}
-        <Box flexDirection="row" alignItems="center" width="100%">
-          {limits}
-          <Box flexGrow={1} flexDirection="row" justifyContent="flex-end">
-            {/* Opens the usage-analytics side pane (its /spend command). */}
-            <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
-          </Box>
-        </Box>
-        <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
+      <Box flexDirection="row" alignItems="center" columnGap={3}>
+        {limits}
+        {/* Opens the usage-analytics side pane (its /spend command). */}
+        <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
+        {rest}
       </Box>
     )
   })
