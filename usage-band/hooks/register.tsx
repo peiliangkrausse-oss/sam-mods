@@ -23,13 +23,15 @@ const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'Week' }
 const COL_PX = 12.5
 const CELL_PX = 15
 const SPARE = 0.95
-const PAD_CELLS = 3
+const PAD_CELLS = 4
 // Clear space between the band's content and the edge of its box.
 const EDGE_CELLS = 2
 // Below this a quarter of the band is too tight for one cell, so the band becomes two rows of two.
 const MIN_CELL_PX = 190
 const MIN_BAR_PX = 24
-const MAX_BAR_PX = 260
+const MAX_BAR_PX = 160
+// Share of the leftover width a bar may take; the rest is safety margin, since text widths are estimates.
+const BAR_SPARE = 0.85
 const BAR_H = 4
 const AIR = 0
 const SVG_H = BAR_H + AIR * 2
@@ -40,8 +42,8 @@ const ITEM_GAP = 1
 
 // The app sends no limits until its first reading; keep their columns so the layout doesn't jump.
 const PLACEHOLDER_KINDS = ['five_hour', 'seven_day']
-// Rough desktop width of one character, to size each bar to the words around it.
-const CHAR_PX = 8
+// Rough desktop width of one character (on the generous side), to size the bars.
+const CHAR_PX = 10
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
 const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
@@ -191,10 +193,11 @@ export const register: Register = (on, options) => {
     const cellPx = (isTwoByTwo ? availPx / 2 : availPx / 4) - PAD_CELLS * CELL_PX
     const colWidth = isTwoByTwo ? '50%' : '25%'
 
-    // Label, bar, bold value and detail in one row; the bar takes whatever width the words leave.
+    // Label, bar and bold value in one row. Every bar is the same width, sized to the widest cell
+    // ("Context 100%") with room to spare, so no cell spills into the next one.
+    const widest = ('Context'.length + '100%'.length) * CHAR_PX + 2 * ITEM_GAP * CELL_PX
+    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((cellPx - widest) * BAR_SPARE)))
     const meter = (name: string, value: string, detail: string, percent: number | null) => {
-      const words = (name.length + value.length + detail.length) * CHAR_PX + 3 * ITEM_GAP * CELL_PX
-      const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor(cellPx - words)))
       return (
         <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={colWidth} paddingRight={PAD_CELLS}>
           <Text>{name}</Text>
