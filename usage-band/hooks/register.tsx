@@ -42,6 +42,9 @@ const ITEM_GAP = 1
 const PLACEHOLDER_KINDS = ['five_hour', 'seven_day']
 // Rough desktop width of one character (on the generous side), to size the bars.
 const CHAR_PX = 10
+// Share of the band each meter gets; the rest at the right holds the Usage link.
+const METER_SHARE = 0.44
+const METER_WIDTH = `${METER_SHARE * 100}%`
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
 const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
@@ -170,25 +173,26 @@ export const register: Register = on => {
 
     const { Box, Button, Svg, Text } = $.ui.resolve(e)
 
-    // Just the 5-hour and weekly limits, side by side on one line, each half of the band.
+    // The 5-hour and weekly limits side by side on one line, with the Usage link at the far right.
     const availPx = e.props.bodyColumns * COL_PX * SPARE - EDGE_CELLS * 2 * CELL_PX
-    const halfPx = availPx / 2 - PAD_CELLS * CELL_PX
-    // Both bars are the same width, sized to the wider cell ("Week 100%") with room to spare.
-    const words = ('Week'.length + '100%'.length) * CHAR_PX + 2 * ITEM_GAP * CELL_PX
+    const halfPx = availPx * METER_SHARE - PAD_CELLS * CELL_PX
+    // Both bars are the same width, sized to the widest cell ("Week 100% ↻ 6d 23h") with room to spare.
+    const words = ('Week'.length + '100%'.length + '↻ 6d 23h'.length) * CHAR_PX + 3 * ITEM_GAP * CELL_PX
     const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((halfPx - words) * BAR_SPARE)))
-    const meter = (name: string, value: string, percent: number | null) => (
-      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width="50%" paddingRight={PAD_CELLS}>
+    const meter = (name: string, value: string, percent: number | null, resets = '') => (
+      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={METER_WIDTH} paddingRight={PAD_CELLS}>
         <Text>{name}</Text>
         <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
         <Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text>
+        {resets ? <Text dimColor>{resets}</Text> : null}
       </Box>
     )
 
-    // Reset times live in the 80%/95% toasts; they didn't fit in the band.
+    // The reset time follows the %, dimmed, e.g. "↻ 3h 43m".
     const limits =
       snap.limits.length === 0
         ? PLACEHOLDER_KINDS.map(kind => meter(short(kind), '–', null))
-        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.percent))
+        : snap.limits.map(l => meter(short(l.kind), `${l.percent}%`, l.percent, l.resetsAt ? `↻ ${until(l.resetsAt, snap.at)}` : ''))
 
     const snooze = await read($, snoozedBelow)
     const pct = snap.contextPercent
@@ -223,8 +227,12 @@ export const register: Register = on => {
       <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS}>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
         {handoff}
-        <Box flexDirection="row" width="100%">
+        <Box flexDirection="row" alignItems="center" width="100%">
           {limits}
+          <Box flexGrow={1} flexDirection="row" justifyContent="flex-end">
+            {/* Opens the usage-analytics side pane (its /spend command). */}
+            <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
+          </Box>
         </Box>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
       </Box>

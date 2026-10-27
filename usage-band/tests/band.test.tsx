@@ -28,7 +28,7 @@ const measure = (fiveHour: number, weekly: number, ctx = 7) => {
   return { context: u.context, rateLimits: u.rateLimits, cost: u.cost, changed: ['rateLimits' as const] }
 }
 
-test('one line with only the 5-hour and weekly limits', async ($, on) => {
+test('one line: the 5-hour and weekly limits with reset times, and the Usage link', async ($, on) => {
   session(on, 2, 28)
   await $.session.measure(measure(2, 28))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
@@ -37,9 +37,24 @@ test('one line with only the 5-hour and weekly limits', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: '2%' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Week' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '28%' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '↻ 4h 12m' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '↻ 5d 9h' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Context' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: '€1.00' })).toBeUndefined()
-  expect(await ui.find({ key: 'open-usage' })).toBeUndefined()
+})
+
+test('the Usage link opens the usage pane', async ($, on) => {
+  session(on, 2, 28)
+  const ran: string[] = []
+  on('command.run', (_$, e) => {
+    ran.push(e.command)
+    return { text: '' }
+  })
+  await $.session.measure(measure(2, 28))
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
+
+  await ui.press({ key: 'open-usage' })
+  expect(ran).toEqual(['spend'])
 })
 
 test('colours a limit amber past 80% and red past 95%', async ($, on) => {
