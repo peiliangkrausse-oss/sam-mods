@@ -1,9 +1,17 @@
 {
   "name": "usage-band",
-  "version": "0.6.2",
-  "description": "Thin one-line usage band above the prompt in the desktop Code tab: 5-hour and weekly limits as bars with their %. Bars turn amber at 80% and red at 95%. Shows a hand-off row when the chat is 85% full. Based on desktop-statusline by George Liu (MIT).",
+  "version": "0.6.3",
+  "description": "Thin one-line usage band above the prompt in the desktop Code tab: 5-hour and weekly limits with reset times, this chat's cost in euros, and a Usage link. Bars turn amber at 80% and red at 95%. Shows a hand-off row when the chat is 85% full. Based on desktop-statusline by George Liu (MIT).",
   "author": {
     "name": "Sam"
   },
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "eur_rate": {
+      "type": "string",
+      "title": "Dollar to euro rate",
+      "description": "How many euros one US dollar is worth. Claude reports cost in dollars; the band multiplies by this. Update it now and then.",
+      "default": "0.86"
+    }
+  }
 }

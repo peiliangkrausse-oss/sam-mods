@@ -127,7 +127,10 @@ const refresh = async ($: EngineInterface) => {
   await warn($, limits, now)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const parsed = Number(String(options.eur_rate ?? '').replace(',', '.'))
+  const eurRate = Number.isFinite(parsed) && parsed > 0 ? parsed : 0.86
+
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await refresh($)
@@ -230,7 +233,9 @@ export const register: Register = on => {
         {handoff}
         <Box flexDirection="row" alignItems="center" width="100%">
           {limits}
-          <Box flexGrow={1} flexDirection="row" justifyContent="flex-end">
+          <Box flexGrow={1} flexDirection="row" justifyContent="flex-end" alignItems="center" columnGap={2}>
+            {/* This chat's cost so far, in euros. */}
+            <Box flexShrink={0}><Text bold>{snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`}</Text></Box>
             {/* Opens the usage-analytics side pane (its /spend command). */}
             <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
           </Box>

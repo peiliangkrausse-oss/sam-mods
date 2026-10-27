@@ -28,7 +28,7 @@ const measure = (fiveHour: number, weekly: number, ctx = 7) => {
   return { context: u.context, rateLimits: u.rateLimits, cost: u.cost, changed: ['rateLimits' as const] }
 }
 
-test('one line: the 5-hour and weekly limits with reset times, and the Usage link', async ($, on) => {
+test('one line: the 5-hour and weekly limits with reset times, the € cost and the Usage link', { options: { eur_rate: '0.9' } }, async ($, on) => {
   session(on, 2, 28)
   await $.session.measure(measure(2, 28))
   const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', component: 'AbovePrompt', props: PROPS })
@@ -40,7 +40,7 @@ test('one line: the 5-hour and weekly limits with reset times, and the Usage lin
   expect(await ui.find({ type: 'Text', text: '↻ 4h 12m' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '↻ 5d 9h' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Context' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: '€1.00' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '€0.90' })).toBeDefined()
 })
 
 test('the Usage link opens the usage pane', async ($, on) => {
