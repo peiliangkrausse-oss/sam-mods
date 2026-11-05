@@ -23,7 +23,6 @@ const SHORT: Record<string, string> = { five_hour: '5h', seven_day: 'Week' }
 const COL_PX = 12.5
 const CELL_PX = 15
 const SPARE = 0.95
-const PAD_CELLS = 4
 // Clear space between the band's content and the edge of its box.
 const EDGE_CELLS = 2
 const MIN_BAR_PX = 24
@@ -37,14 +36,13 @@ const SVG_H = BAR_H + AIR * 2
 const EDGE_PX = 6
 // Space between the items inside one cell, in cells.
 const ITEM_GAP = 1
+// Smallest space between the four groups; spare width is spread evenly on top of it.
+const GROUP_GAP = 3
 
 // The app sends no limits until its first reading; keep their columns so the layout doesn't jump.
 const PLACEHOLDER_KINDS = ['five_hour', 'seven_day']
 // Rough desktop width of one character (on the generous side), to size the bars.
 const CHAR_PX = 10
-// Share of the band each meter gets; the rest at the right holds the Usage link.
-const METER_SHARE = 0.44
-const METER_WIDTH = `${METER_SHARE * 100}%`
 const label = (kind: string) => LABELS[kind] ?? kind.replace(/_/g, ' ')
 const short = (kind: string) => SHORT[kind] ?? label(kind)
 const tone = (percent: number) => (percent >= 95 ? 'error' : percent >= 80 ? 'warning' : undefined)
@@ -178,12 +176,15 @@ export const register: Register = (on, options) => {
 
     // The 5-hour and weekly limits side by side on one line, with the Usage link at the far right.
     const availPx = e.props.bodyColumns * COL_PX * SPARE - EDGE_CELLS * 2 * CELL_PX
-    const halfPx = availPx * METER_SHARE - PAD_CELLS * CELL_PX
-    // Both bars are the same width, sized to the widest cell ("Week 100% ↻ 6d 23h") with room to spare.
-    const words = ('Week'.length + '100%'.length + '↻ 6d 23h'.length) * CHAR_PX + 3 * ITEM_GAP * CELL_PX
-    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor((halfPx - words) * BAR_SPARE)))
+    // Both bars are the same width: what is left after every word on the line (widest case) and the
+    // minimum gaps between the groups, shared by the two bars, with room to spare.
+    const words =
+      ('5h'.length + 'Week'.length + 2 * ('100%'.length + '↻ 6d 23h'.length) + '€00.00'.length + 'Usage ›'.length) * CHAR_PX +
+      6 * ITEM_GAP * CELL_PX +
+      3 * GROUP_GAP * CELL_PX
+    const barPx = Math.max(MIN_BAR_PX, Math.min(MAX_BAR_PX, Math.floor(((availPx - words) / 2) * BAR_SPARE)))
     const meter = (name: string, value: string, percent: number | null, resets = '') => (
-      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} width={METER_WIDTH} paddingRight={PAD_CELLS}>
+      <Box flexDirection="row" alignItems="center" columnGap={ITEM_GAP} flexShrink={0}>
         <Box flexShrink={0}><Text>{name}</Text></Box>
         <Svg source={bar(percent, barPx)} alt={percent !== null ? `${name} ${percent}% used` : ''} width={barPx} height={SVG_H} />
         <Box flexShrink={0}><Text bold color={percent === null ? undefined : tone(percent)}>{value}</Text></Box>
@@ -231,14 +232,13 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" width="100%" paddingX={EDGE_CELLS}>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
         {handoff}
-        <Box flexDirection="row" alignItems="center" width="100%">
+        {/* Four groups (5h, Week, cost, Usage) spread edge to edge, so every gap between them is the same. */}
+        <Box flexDirection="row" alignItems="center" width="100%" justifyContent="space-between" columnGap={GROUP_GAP}>
           {limits}
-          <Box flexGrow={1} flexDirection="row" justifyContent="flex-end" alignItems="center" columnGap={2}>
-            {/* This chat's cost so far, in euros. */}
-            <Box flexShrink={0}><Text bold>{snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`}</Text></Box>
-            {/* Opens the usage-analytics side pane (its /spend command). */}
-            <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
-          </Box>
+          {/* This chat's cost so far, in euros. */}
+          <Box flexShrink={0}><Text bold>{snap.costUsd === null ? '–' : `€${(snap.costUsd * eurRate).toFixed(2)}`}</Text></Box>
+          {/* Opens the usage-analytics side pane (its /spend command). */}
+          <Button key="open-usage" label="Usage ›" plain onPress={() => void $.command.run({ command: 'spend' })} />
         </Box>
         <Svg source={spacer(Math.floor(availPx), EDGE_PX)} alt="" width={Math.floor(availPx)} height={EDGE_PX} />
       </Box>
