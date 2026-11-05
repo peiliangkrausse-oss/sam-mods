@@ -11,6 +11,10 @@
     {
       "name": "usage-analytics",
       "source": "./usage-analytics"
+    },
+    {
+      "name": "mcp-panel",
+      "source": "./mcp-panel"
     }
   ],
   "description": "Sam's own Claude mods"
